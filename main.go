@@ -7,6 +7,7 @@ import (
 	"strings"
 	"text/template"
 	"text/template/parse"
+	"unicode"
 )
 
 type Field struct {
@@ -41,7 +42,44 @@ func main() {
 
 func getStructNameFromFileName(filePath string) string {
 	base := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
-	return strings.Title(base) + "Input"
+	return toCamelCase(base) + "Input"
+}
+
+func toCamelCase(s string) string {
+	words := strings.FieldsFunc(s, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsNumber(r)
+	})
+	for i, word := range words {
+		words[i] = strings.Title(word)
+	}
+	return strings.Join(words, "")
+}
+
+func generateStructs(structName string, fields map[string]*Field) {
+	generateStruct(structName, fields, 0, "")
+}
+
+func generateStruct(structName string, fields map[string]*Field, indent int, prefix string) {
+	indentStr := strings.Repeat("\t", indent)
+	fmt.Printf("%stype %s struct {\n", indentStr, structName)
+	for _, field := range fields {
+		fieldType := field.Type
+		if field.IsSlice {
+			fieldType = "[]" + prefix + strings.TrimSuffix(field.Type, "Item")
+		}
+		fmt.Printf("%s\t%s %s\n", indentStr, strings.Title(field.Name), fieldType)
+	}
+	fmt.Printf("%s}\n\n", indentStr)
+
+	for _, field := range fields {
+		if len(field.Children) > 0 {
+			childStructName := prefix + strings.TrimSuffix(field.Type, "Item")
+			if !field.IsSlice {
+				childStructName = field.Type
+			}
+			generateStruct(childStructName, field.Children, indent, prefix)
+		}
+	}
 }
 
 func extractFieldsFromTemplateAST(content string) (map[string]*Field, error) {
@@ -156,32 +194,5 @@ func addField(fields map[string]*Field, ident []string) {
 
 	if len(ident) > 1 {
 		addField(fields[fieldName].Children, ident[1:])
-	}
-}
-
-func generateStructs(structName string, fields map[string]*Field) {
-	generateStruct(structName, fields, 0)
-}
-
-func generateStruct(structName string, fields map[string]*Field, indent int) {
-	indentStr := strings.Repeat("\t", indent)
-	fmt.Printf("%stype %s struct {\n", indentStr, structName)
-	for _, field := range fields {
-		fieldType := field.Type
-		if field.IsSlice {
-			fieldType = "[]" + fieldType
-		}
-		fmt.Printf("%s\t%s %s\n", indentStr, strings.Title(field.Name), fieldType)
-	}
-	fmt.Printf("%s}\n\n", indentStr)
-
-	for _, field := range fields {
-		if len(field.Children) > 0 {
-			childStructName := field.Type
-			if field.IsSlice {
-				childStructName = strings.TrimSuffix(field.Type, "Item")
-			}
-			generateStruct(childStructName, field.Children, indent)
-		}
 	}
 }
