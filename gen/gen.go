@@ -17,8 +17,8 @@ type Field struct {
 	Children map[string]*Field
 }
 
-// Exec is the main function that can be called with a template path
-func Exec(templatePath string) error {
+// Exec is the main function that can be called with a template path, output path, and package name
+func Exec(templatePath, outputPath, packageName string) error {
 	content, err := os.ReadFile(templatePath)
 	if err != nil {
 		return fmt.Errorf("error reading file: %v", err)
@@ -33,9 +33,61 @@ func Exec(templatePath string) error {
 		return fmt.Errorf("error extracting fields: %v", err)
 	}
 
-	generateStructs(structName, fields)
-	generateRenderFunction(funcName, structName, filepath.Base(templatePath))
+	outputFile, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("error creating output file: %v", err)
+	}
+	defer outputFile.Close()
+
+	fmt.Fprintf(outputFile, "package %s\n\n", packageName)
+	fmt.Fprintf(outputFile, "import (\n\t\"bytes\"\n\t\"fmt\"\n\t\"text/template\"\n)\n\n")
+
+	generateStructs(outputFile, structName, fields)
+	generateRenderFunction(outputFile, funcName, structName, templatePath)
 	return nil
+}
+
+// Update other functions to write to the provided file instead of stdout
+func generateStructs(w *os.File, structName string, fields map[string]*Field) {
+	generateStruct(w, structName, fields, 0, structName)
+}
+
+func generateStruct(w *os.File, structName string, fields map[string]*Field, indent int, prefix string) {
+	indentStr := strings.Repeat("\t", indent)
+	fmt.Fprintf(w, "%stype %s struct {\n", indentStr, structName)
+	for _, field := range fields {
+		fieldType := field.Type
+		if field.IsSlice {
+			fieldType = "[]" + prefix + strings.TrimSuffix(field.Type, "Item")
+		}
+		fmt.Fprintf(w, "%s\t%s %s\n", indentStr, strings.Title(field.Name), fieldType)
+	}
+	fmt.Fprintf(w, "%s}\n\n", indentStr)
+
+	for _, field := range fields {
+		if len(field.Children) > 0 {
+			childStructName := prefix + strings.TrimSuffix(field.Type, "Item")
+			if !field.IsSlice {
+				childStructName = prefix + field.Type
+			}
+			generateStruct(w, childStructName, field.Children, indent, prefix)
+		}
+	}
+}
+
+func generateRenderFunction(w *os.File, funcName, structName, templatePath string) {
+	fmt.Fprintf(w, "func %s(input %s) (string, error) {\n", funcName, structName)
+	fmt.Fprintf(w, "\ttmpl, err := template.ParseFiles(%q)\n", templatePath)
+	fmt.Fprintf(w, "\tif err != nil {\n")
+	fmt.Fprintf(w, "\t\treturn \"\", fmt.Errorf(\"error parsing template: %%v\", err)\n")
+	fmt.Fprintf(w, "\t}\n\n")
+	fmt.Fprintf(w, "\tvar buf bytes.Buffer\n")
+	fmt.Fprintf(w, "\terr = tmpl.Execute(&buf, input)\n")
+	fmt.Fprintf(w, "\tif err != nil {\n")
+	fmt.Fprintf(w, "\t\treturn \"\", fmt.Errorf(\"error executing template: %%v\", err)\n")
+	fmt.Fprintf(w, "\t}\n\n")
+	fmt.Fprintf(w, "\treturn buf.String(), nil\n")
+	fmt.Fprintf(w, "}\n")
 }
 
 func toCamelCase(s string) string {
@@ -46,48 +98,6 @@ func toCamelCase(s string) string {
 		words[i] = strings.Title(word)
 	}
 	return strings.Join(words, "")
-}
-
-func generateStructs(structName string, fields map[string]*Field) {
-	generateStruct(structName, fields, 0, structName)
-}
-
-func generateStruct(structName string, fields map[string]*Field, indent int, prefix string) {
-	indentStr := strings.Repeat("\t", indent)
-	fmt.Printf("%stype %s struct {\n", indentStr, structName)
-	for _, field := range fields {
-		fieldType := field.Type
-		if field.IsSlice {
-			fieldType = "[]" + prefix + strings.TrimSuffix(field.Type, "Item")
-		}
-		fmt.Printf("%s\t%s %s\n", indentStr, strings.Title(field.Name), fieldType)
-	}
-	fmt.Printf("%s}\n\n", indentStr)
-
-	for _, field := range fields {
-		if len(field.Children) > 0 {
-			childStructName := prefix + strings.TrimSuffix(field.Type, "Item")
-			if !field.IsSlice {
-				childStructName = prefix + field.Type
-			}
-			generateStruct(childStructName, field.Children, indent, prefix)
-		}
-	}
-}
-
-func generateRenderFunction(funcName, structName, templatePath string) {
-	fmt.Printf("func %s(input %s) (string, error) {\n", funcName, structName)
-	fmt.Printf("\ttmpl, err := template.ParseFiles(%q)\n", templatePath)
-	fmt.Printf("\tif err != nil {\n")
-	fmt.Printf("\t\treturn \"\", fmt.Errorf(\"error parsing template: %%v\", err)\n")
-	fmt.Printf("\t}\n\n")
-	fmt.Printf("\tvar buf bytes.Buffer\n")
-	fmt.Printf("\terr = tmpl.Execute(&buf, input)\n")
-	fmt.Printf("\tif err != nil {\n")
-	fmt.Printf("\t\treturn \"\", fmt.Errorf(\"error executing template: %%v\", err)\n")
-	fmt.Printf("\t}\n\n")
-	fmt.Printf("\treturn buf.String(), nil\n")
-	fmt.Printf("}\n")
 }
 
 func extractFieldsFromTemplateAST(content string) (map[string]*Field, error) {
