@@ -152,9 +152,16 @@ func generateStruct(structName string, fields map[string]*Field, indent int) {
 			fieldType = "[]" + fieldType
 		}
 		fmt.Printf("%s\t%s %s\n", indentStr, strings.Title(field.Name), fieldType)
-		if len(field.Children) > 0 {
-			generateStruct(field.Type, field.Children, indent+1)
-		}
 	}
 	fmt.Printf("%s}\n\n", indentStr)
+
+	for _, field := range fields {
+		if len(field.Children) > 0 {
+			childStructName := field.Type
+			if field.IsSlice {
+				childStructName = strings.TrimSuffix(field.Type, "Item")
+			}
+			generateStruct(childStructName, field.Children, indent)
+		}
+	}
 }
