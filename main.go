@@ -43,7 +43,6 @@ func getStructNameFromFileName(filePath string) string {
 	base := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
 	return strings.Title(base) + "Input"
 }
-
 func extractFieldsFromTemplateAST(content string) (map[string]*Field, error) {
 	fields := make(map[string]*Field)
 
@@ -52,8 +51,8 @@ func extractFieldsFromTemplateAST(content string) (map[string]*Field, error) {
 		return nil, fmt.Errorf("error parsing template: %v", err)
 	}
 
-	var extractFields func(node parse.Node, currentFields map[string]*Field, inRange bool) error
-	extractFields = func(node parse.Node, currentFields map[string]*Field, inRange bool) error {
+	var extractFields func(node parse.Node, currentFields map[string]*Field) error
+	extractFields = func(node parse.Node, currentFields map[string]*Field) error {
 		if node == nil {
 			return nil
 		}
@@ -66,44 +65,23 @@ func extractFieldsFromTemplateAST(content string) (map[string]*Field, error) {
 			for _, cmd := range n.Pipe.Cmds {
 				for _, arg := range cmd.Args {
 					if field, ok := arg.(*parse.FieldNode); ok && len(field.Ident) > 0 {
-						fieldName := field.Ident[0]
-						if _, exists := currentFields[fieldName]; !exists {
-							currentFields[fieldName] = &Field{
-								Name:     fieldName,
-								Type:     "string", // Default to string, can be enhanced later
-								Children: make(map[string]*Field),
-							}
-						}
-						if inRange && len(field.Ident) > 1 {
-							// Handle nested fields in range
-							currentField := currentFields[fieldName]
-							for _, nestedField := range field.Ident[1:] {
-								if _, exists := currentField.Children[nestedField]; !exists {
-									currentField.Children[nestedField] = &Field{
-										Name:     nestedField,
-										Type:     "string",
-										Children: make(map[string]*Field),
-									}
-								}
-								currentField = currentField.Children[nestedField]
-							}
-						}
+						addField(currentFields, field.Ident)
 					}
 				}
 			}
 		case *parse.ListNode:
 			if n != nil {
 				for _, item := range n.Nodes {
-					if err := extractFields(item, currentFields, inRange); err != nil {
+					if err := extractFields(item, currentFields); err != nil {
 						return err
 					}
 				}
 			}
 		case *parse.IfNode:
-			if err := extractFields(n.List, currentFields, inRange); err != nil {
+			if err := extractFields(n.List, currentFields); err != nil {
 				return err
 			}
-			if err := extractFields(n.ElseList, currentFields, inRange); err != nil {
+			if err := extractFields(n.ElseList, currentFields); err != nil {
 				return err
 			}
 		case *parse.RangeNode:
@@ -117,29 +95,48 @@ func extractFieldsFromTemplateAST(content string) (map[string]*Field, error) {
 						Children: make(map[string]*Field),
 					}
 				}
-				if err := extractFields(n.List, currentFields[rangeVar].Children, true); err != nil {
+				if err := extractFields(n.List, currentFields[rangeVar].Children); err != nil {
 					return err
 				}
 			}
-			if err := extractFields(n.ElseList, currentFields, inRange); err != nil {
+			if err := extractFields(n.ElseList, currentFields); err != nil {
 				return err
 			}
 		case *parse.WithNode:
-			if err := extractFields(n.List, currentFields, inRange); err != nil {
+			if err := extractFields(n.List, currentFields); err != nil {
 				return err
 			}
-			if err := extractFields(n.ElseList, currentFields, inRange); err != nil {
+			if err := extractFields(n.ElseList, currentFields); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
 
-	if err := extractFields(tmpl.Tree.Root, fields, false); err != nil {
+	if err := extractFields(tmpl.Tree.Root, fields); err != nil {
 		return nil, fmt.Errorf("error extracting fields: %v", err)
 	}
 
 	return fields, nil
+}
+
+func addField(fields map[string]*Field, ident []string) {
+	if len(ident) == 0 {
+		return
+	}
+
+	fieldName := ident[0]
+	if _, exists := fields[fieldName]; !exists {
+		fields[fieldName] = &Field{
+			Name:     fieldName,
+			Type:     "string", // Default to string, can be enhanced later
+			Children: make(map[string]*Field),
+		}
+	}
+
+	if len(ident) > 1 {
+		addField(fields[fieldName].Children, ident[1:])
+	}
 }
 
 func generateStructs(structName string, fields map[string]*Field) {
