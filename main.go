@@ -56,7 +56,7 @@ func toCamelCase(s string) string {
 }
 
 func generateStructs(structName string, fields map[string]*Field) {
-	generateStruct(structName, fields, 0, "")
+	generateStruct(structName, fields, 0, structName)
 }
 
 func generateStruct(structName string, fields map[string]*Field, indent int, prefix string) {
@@ -75,7 +75,7 @@ func generateStruct(structName string, fields map[string]*Field, indent int, pre
 		if len(field.Children) > 0 {
 			childStructName := prefix + strings.TrimSuffix(field.Type, "Item")
 			if !field.IsSlice {
-				childStructName = field.Type
+				childStructName = prefix + field.Type
 			}
 			generateStruct(childStructName, field.Children, indent, prefix)
 		}
