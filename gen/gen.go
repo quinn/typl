@@ -24,19 +24,18 @@ func Exec(templatePath string) error {
 		return fmt.Errorf("error reading file: %v", err)
 	}
 
-	structName := getStructNameFromFileName(templatePath)
+	base := strings.TrimSuffix(filepath.Base(templatePath), filepath.Ext(templatePath))
+	funcName := toCamelCase(base)
+	structName := funcName + "Input"
+
 	fields, err := extractFieldsFromTemplateAST(string(content))
 	if err != nil {
 		return fmt.Errorf("error extracting fields: %v", err)
 	}
 
 	generateStructs(structName, fields)
+	generateRenderFunction(funcName, structName, filepath.Base(templatePath))
 	return nil
-}
-
-func getStructNameFromFileName(filePath string) string {
-	base := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
-	return toCamelCase(base) + "Input"
 }
 
 func toCamelCase(s string) string {
@@ -74,6 +73,21 @@ func generateStruct(structName string, fields map[string]*Field, indent int, pre
 			generateStruct(childStructName, field.Children, indent, prefix)
 		}
 	}
+}
+
+func generateRenderFunction(funcName, structName, templatePath string) {
+	fmt.Printf("func %s(input %s) (string, error) {\n", funcName, structName)
+	fmt.Printf("\ttmpl, err := template.ParseFiles(%q)\n", templatePath)
+	fmt.Printf("\tif err != nil {\n")
+	fmt.Printf("\t\treturn \"\", fmt.Errorf(\"error parsing template: %%v\", err)\n")
+	fmt.Printf("\t}\n\n")
+	fmt.Printf("\tvar buf bytes.Buffer\n")
+	fmt.Printf("\terr = tmpl.Execute(&buf, input)\n")
+	fmt.Printf("\tif err != nil {\n")
+	fmt.Printf("\t\treturn \"\", fmt.Errorf(\"error executing template: %%v\", err)\n")
+	fmt.Printf("\t}\n\n")
+	fmt.Printf("\treturn buf.String(), nil\n")
+	fmt.Printf("}\n")
 }
 
 func extractFieldsFromTemplateAST(content string) (map[string]*Field, error) {
