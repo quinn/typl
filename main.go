@@ -43,6 +43,7 @@ func getStructNameFromFileName(filePath string) string {
 	base := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
 	return strings.Title(base) + "Input"
 }
+
 func extractFieldsFromTemplateAST(content string) (map[string]*Field, error) {
 	fields := make(map[string]*Field)
 
@@ -85,7 +86,7 @@ func extractFieldsFromTemplateAST(content string) (map[string]*Field, error) {
 				return err
 			}
 		case *parse.RangeNode:
-			if len(n.Pipe.Decl) > 0 {
+			if n.Pipe != nil && len(n.Pipe.Decl) > 0 {
 				rangeVar := n.Pipe.Decl[0].String()
 				if _, exists := currentFields[rangeVar]; !exists {
 					currentFields[rangeVar] = &Field{
@@ -97,6 +98,25 @@ func extractFieldsFromTemplateAST(content string) (map[string]*Field, error) {
 				}
 				if err := extractFields(n.List, currentFields[rangeVar].Children); err != nil {
 					return err
+				}
+			} else if n.Pipe != nil {
+				for _, cmd := range n.Pipe.Cmds {
+					for _, arg := range cmd.Args {
+						if field, ok := arg.(*parse.FieldNode); ok && len(field.Ident) > 0 {
+							rangeVar := field.Ident[0]
+							if _, exists := currentFields[rangeVar]; !exists {
+								currentFields[rangeVar] = &Field{
+									Name:     rangeVar,
+									Type:     rangeVar + "Item",
+									IsSlice:  true,
+									Children: make(map[string]*Field),
+								}
+							}
+							if err := extractFields(n.List, currentFields[rangeVar].Children); err != nil {
+								return err
+							}
+						}
+					}
 				}
 			}
 			if err := extractFields(n.ElseList, currentFields); err != nil {
