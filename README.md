@@ -4,9 +4,9 @@
 go install github.com/quinn/typl@latest
 ```
 
-```
-# templates/todo_list.tpl
+given a template `templates/todo_list.tpl`:
 
+```
 <h1>{{.PageTitle}}</h1>
 <ul>
     {{range .Todos}}
@@ -25,11 +25,9 @@ run:
 typl templates/todo_list.tpl
 ```
 
-creates:
+creates `templates/todo_list.go`:
 
 ```go
-// templates/todo_list.go
-
 package templates
 
 import (
