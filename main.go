@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/quinn/qen/gen"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/quinn/typl/gen"
 )
 
 func main() {
@@ -26,14 +27,8 @@ func main() {
 		return
 	}
 
-	currentDir, err := os.Getwd()
-	if err != nil {
-		fmt.Printf("Error getting current directory: %v\n", err)
-		return
-	}
-	packageName := filepath.Base(currentDir)
-
 	for _, templatePath := range matches {
+		packageName := filepath.Base(filepath.Dir(templatePath))
 		outputPath := strings.TrimSuffix(templatePath, filepath.Ext(templatePath)) + ".go"
 		err := gen.Exec(templatePath, outputPath, packageName)
 		if err != nil {

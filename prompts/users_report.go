@@ -1,4 +1,4 @@
-package qen
+package typlmpts
 
 import (
 	"bytes"
@@ -7,29 +7,29 @@ import (
 )
 
 type UsersReportInput struct {
+	Users           []UsersReportInputUsers
+	TotalUsers      string
+	ActiveUsers     string
+	InactiveUsers   string
 	HasPremiumUsers bool
-	PremiumUsers []UsersReportInputPremiumUsers
-	GeneratedBy string
-	GenerationDate string
-	Users []UsersReportInputUsers
-	TotalUsers string
-	ActiveUsers string
-	InactiveUsers string
+	PremiumUsers    []UsersReportInputPremiumUsers
+	GeneratedBy     string
+	GenerationDate  string
 }
 
 type UsersReportInputUsers struct {
-	ID string
+	LastName  string
+	Email     string
+	Role      string
+	IsActive  bool
+	ID        string
 	FirstName string
-	LastName string
-	Email string
-	Role string
-	IsActive bool
 }
 
 type UsersReportInputPremiumUsers struct {
-	FirstName string
-	LastName string
+	LastName    string
 	MemberSince string
+	FirstName   string
 }
 
 func UsersReport(input UsersReportInput) (string, error) {
