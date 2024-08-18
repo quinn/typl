@@ -43,10 +43,10 @@ func Exec(templatePath, outputPath, packageName string) error {
 
 	isSliceRoot := len(fields) == 1 && fields["Root"] != nil && fields["Root"].IsSlice
 	if isSliceRoot {
-		structName := funcName + "Item"
+		structName = funcName + "Item"
 		generateStruct(outputFile, structName, fields["Root"].Children, 0, "")
 	} else {
-		structName := funcName + "Input"
+		structName = funcName + "Input"
 		generateStruct(outputFile, structName, fields, 0, funcName)
 	}
 
