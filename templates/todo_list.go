@@ -6,17 +6,17 @@ import (
 	"text/template"
 )
 
-type TodoListInput struct {
-	Todos []TodoListInputTodos
+type TodoListItem struct {
 	PageTitle string
+	Todos []TodoListTodos
 }
 
-type TodoListInputTodos struct {
+type TodoListTodos struct {
 	Done bool
 	Title string
 }
 
-func TodoList(input TodoListInput) (string, error) {
+func TodoList(input TodoListItem) (string, error) {
 	tmpl, err := template.ParseFiles("templates/todo_list.tpl")
 	if err != nil {
 		return "", fmt.Errorf("error parsing template: %v", err)

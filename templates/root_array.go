@@ -6,16 +6,12 @@ import (
 	"text/template"
 )
 
-type RootArrayInput struct {
-	Root []RootArrayInputRoot
-}
-
-type RootArrayInputRoot struct {
+type RootArrayItem struct {
 	Done bool
 	Title string
 }
 
-func RootArray(input RootArrayInput) (string, error) {
+func RootArray(input []RootArrayItem) (string, error) {
 	tmpl, err := template.ParseFiles("templates/root_array.tpl")
 	if err != nil {
 		return "", fmt.Errorf("error parsing template: %v", err)

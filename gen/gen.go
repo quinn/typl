@@ -17,7 +17,6 @@ type Field struct {
 	Children map[string]*Field
 }
 
-// Exec is the main function that can be called with a template path, output path, and package name
 func Exec(templatePath, outputPath, packageName string) error {
 	content, err := os.ReadFile(templatePath)
 	if err != nil {
@@ -26,7 +25,7 @@ func Exec(templatePath, outputPath, packageName string) error {
 
 	base := strings.TrimSuffix(filepath.Base(templatePath), filepath.Ext(templatePath))
 	funcName := toCamelCase(base)
-	structName := funcName + "Input"
+	var structName string
 
 	fields, err := extractFieldsFromTemplateAST(string(content))
 	if err != nil {
@@ -42,8 +41,16 @@ func Exec(templatePath, outputPath, packageName string) error {
 	fmt.Fprintf(outputFile, "package %s\n\n", packageName)
 	fmt.Fprintf(outputFile, "import (\n\t\"bytes\"\n\t\"fmt\"\n\t\"text/template\"\n)\n\n")
 
-	generateStruct(outputFile, structName, fields, 0, structName)
-	generateRenderFunction(outputFile, funcName, structName, templatePath)
+	isSliceRoot := len(fields) == 1 && fields["Root"] != nil && fields["Root"].IsSlice
+	if isSliceRoot {
+		structName := funcName + "Item"
+		generateStruct(outputFile, structName, fields["Root"].Children, 0, "")
+	} else {
+		structName := funcName + "Input"
+		generateStruct(outputFile, structName, fields, 0, funcName)
+	}
+
+	generateRenderFunction(outputFile, funcName, structName, templatePath, isSliceRoot)
 	return nil
 }
 
@@ -70,8 +77,13 @@ func generateStruct(w *os.File, structName string, fields map[string]*Field, ind
 	}
 }
 
-func generateRenderFunction(w *os.File, funcName, structName, templatePath string) {
-	fmt.Fprintf(w, "func %s(input %s) (string, error) {\n", funcName, structName)
+func generateRenderFunction(w *os.File, funcName, structName, templatePath string, isRootArray bool) {
+	inputType := structName
+	if isRootArray {
+		inputType = "[]" + structName
+	}
+
+	fmt.Fprintf(w, "func %s(input %s) (string, error) {\n", funcName, inputType)
 	fmt.Fprintf(w, "\ttmpl, err := template.ParseFiles(%q)\n", templatePath)
 	fmt.Fprintf(w, "\tif err != nil {\n")
 	fmt.Fprintf(w, "\t\treturn \"\", fmt.Errorf(\"error parsing template: %%v\", err)\n")
@@ -162,19 +174,19 @@ func extractFieldsFromTemplateAST(content string) (map[string]*Field, error) {
 			} else if n.Pipe != nil {
 				for _, cmd := range n.Pipe.Cmds {
 					for _, arg := range cmd.Args {
-						rangeVar := "Root"
-						isSlice := false
-
 						if _, ok := arg.(*parse.DotNode); ok {
-							isSlice = true
-						}
-
-						if field, ok := arg.(*parse.FieldNode); ok && len(field.Ident) > 0 {
-							rangeVar = field.Ident[0]
-							isSlice = true
-						}
-
-						if isSlice {
+							// This is a root-level array
+							currentFields["Root"] = &Field{
+								Name:     "Root",
+								Type:     "RootItem",
+								IsSlice:  true,
+								Children: make(map[string]*Field),
+							}
+							if err := extractFields(n.List, currentFields["Root"].Children); err != nil {
+								return err
+							}
+						} else if field, ok := arg.(*parse.FieldNode); ok && len(field.Ident) > 0 {
+							rangeVar := field.Ident[0]
 							if _, exists := currentFields[rangeVar]; !exists {
 								currentFields[rangeVar] = &Field{
 									Name:     rangeVar,
@@ -190,8 +202,6 @@ func extractFieldsFromTemplateAST(content string) (map[string]*Field, error) {
 					}
 				}
 			}
-
-			fmt.Println("test")
 			if err := extractFields(n.ElseList, currentFields); err != nil {
 				return err
 			}
