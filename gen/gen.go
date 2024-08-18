@@ -42,14 +42,9 @@ func Exec(templatePath, outputPath, packageName string) error {
 	fmt.Fprintf(outputFile, "package %s\n\n", packageName)
 	fmt.Fprintf(outputFile, "import (\n\t\"bytes\"\n\t\"fmt\"\n\t\"text/template\"\n)\n\n")
 
-	generateStructs(outputFile, structName, fields)
+	generateStruct(outputFile, structName, fields, 0, structName)
 	generateRenderFunction(outputFile, funcName, structName, templatePath)
 	return nil
-}
-
-// Update other functions to write to the provided file instead of stdout
-func generateStructs(w *os.File, structName string, fields map[string]*Field) {
-	generateStruct(w, structName, fields, 0, structName)
 }
 
 func generateStruct(w *os.File, structName string, fields map[string]*Field, indent int, prefix string) {
@@ -167,8 +162,19 @@ func extractFieldsFromTemplateAST(content string) (map[string]*Field, error) {
 			} else if n.Pipe != nil {
 				for _, cmd := range n.Pipe.Cmds {
 					for _, arg := range cmd.Args {
+						rangeVar := "Root"
+						isSlice := false
+
+						if _, ok := arg.(*parse.DotNode); ok {
+							isSlice = true
+						}
+
 						if field, ok := arg.(*parse.FieldNode); ok && len(field.Ident) > 0 {
-							rangeVar := field.Ident[0]
+							rangeVar = field.Ident[0]
+							isSlice = true
+						}
+
+						if isSlice {
 							if _, exists := currentFields[rangeVar]; !exists {
 								currentFields[rangeVar] = &Field{
 									Name:     rangeVar,
@@ -184,6 +190,8 @@ func extractFieldsFromTemplateAST(content string) (map[string]*Field, error) {
 					}
 				}
 			}
+
+			fmt.Println("test")
 			if err := extractFields(n.ElseList, currentFields); err != nil {
 				return err
 			}
